@@ -17,9 +17,7 @@ class HomeScreen extends StatelessWidget {
                 IconButton(
                   icon: const Icon(Icons.logout),
                   tooltip: 'Logout',
-                  onPressed: () {
-                    authService.logout();
-                  },
+                  onPressed: () => authService.logout(),
                 ),
             ],
           ),
@@ -37,30 +35,37 @@ class HomeScreen extends StatelessWidget {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        const Text(
-          'Bem-vindo!',
-          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 20),
+        const Text('Bem-vindo!', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 30),
+        
+        // Botão de Login do Spotify
         ElevatedButton.icon(
-          icon: const Icon(Icons.login),
+          icon: const Icon(Icons.music_note), // Ícone genérico ou do Spotify
           label: const Text('Login com Spotify'),
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.green,
-            foregroundColor: Colors.white,
+            backgroundColor: Colors.green, foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+            minimumSize: const Size(250, 50),
           ),
           onPressed: () async {
-            try {
-              await authService.loginSpotify();
-            } catch (e) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Erro no login: $e'),
-                  backgroundColor: Colors.red,
-                ),
-              );
-            }
+            try { await authService.loginSpotify(); } 
+            catch (e) { _showErrorSnackbar(context, e.toString()); }
+          },
+        ),
+        const SizedBox(height: 20),
+
+        // --- BOTÃO DO DEEZER ADICIONADO ---
+        ElevatedButton.icon(
+          icon: const Icon(Icons.album), // Ícone genérico ou do Deezer
+          label: const Text('Login com Deezer'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blueGrey[700], foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+            minimumSize: const Size(250, 50),
+          ),
+          onPressed: () async {
+            try { await authService.loginDeezer(); } 
+            catch (e) { _showErrorSnackbar(context, e.toString()); }
           },
         ),
       ],
@@ -73,25 +78,23 @@ class HomeScreen extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Text(
-            'Login bem-sucedido!',
-            style: TextStyle(fontSize: 22, color: Colors.green),
-          ),
-          const SizedBox(height: 20),
+          if (authService.isSpotifyAuthenticated) ...[
+            const Text('Conectado ao Spotify!', style: TextStyle(fontSize: 20, color: Colors.green)),
+            const SizedBox(height: 20),
+          ],
+          if (authService.isDeezerAuthenticated) ...[
+            const Text('Conectado ao Deezer!', style: TextStyle(fontSize: 20, color: Colors.lightBlue)),
+            const SizedBox(height: 20),
+          ],
           const Text('Agora você pode implementar a busca de músicas e playlists.'),
-          const SizedBox(height: 40),
-          const Text(
-            'Seu Access Token (sensível, não exiba em um app real):',
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 8),
-          SelectableText(
-            authService.accessToken ?? 'Nenhum token encontrado',
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 12, color: Colors.grey),
-          ),
         ],
       ),
+    );
+  }
+
+  void _showErrorSnackbar(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
     );
   }
 }

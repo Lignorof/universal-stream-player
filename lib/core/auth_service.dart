@@ -11,138 +11,116 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService extends ChangeNotifier {
-  // --- Configuração de Credenciais e URIs ---
+  // --- Configuração de Credenciais ---
   static final String _spotifyClientId = dotenv.env['SPOTIFY_CLIENT_ID'] ?? '';
+  static final String _deezerAppId = dotenv.env['DEEZER_APP_ID'] ?? '';
 
+  // --- Lógica de Detecção de Plataforma Universal ---
   static bool get _isDesktop =>
       !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS );
 
+  // --- Configurações do Spotify ---
   static String get _spotifyRedirectUri =>
       _isDesktop ? 'http://127.0.0.1:8000/callback' : 'usp://callback';
+  
+  static String get _spotifyCallbackScheme => 
+      _isDesktop ? 'http://127.0.0.1:8000' : 'usp';
 
-  static String get _spotifyCallbackScheme => _isDesktop ? 'http' : 'usp';
+  // --- Configurações do Deezer ---
+  static String get _deezerRedirectUri =>
+      _isDesktop ? 'http://127.0.0.1:8001/callback' : 'usp://deezer-callback';
+  
+  static String get _deezerCallbackScheme => 
+      _isDesktop ? 'http://127.0.0.1:8001' : 'usp';
 
+  // --- Chaves e Estado de Autenticação ---
   static const String _spotifyTokenKey = 'usp_spotify_access_token';
   static const String _spotifyRefreshTokenKey = 'usp_spotify_refresh_token';
+  static const String _deezerTokenKey = 'usp_deezer_access_token';
 
-  // --- Estado de Autenticação ---
-  String? _accessToken;
-  String? get accessToken => _accessToken;
-  bool get isAuthenticated => _accessToken != null;
+  String? _spotifyAccessToken;
+  String? _deezerAccessToken;
+  bool get isSpotifyAuthenticated => _spotifyAccessToken != null;
+  bool get isDeezerAuthenticated => _deezerAccessToken != null;
+  bool get isAuthenticated => isSpotifyAuthenticated || isDeezerAuthenticated;
 
-  // --- Inicialização ---
-  AuthService( ) {
-    _loadTokenFromStorage();
-  }
+  // --- Construtor e Métodos de Ciclo de Vida ---
+  AuthService( ) { _loadTokens(); }
 
-  Future<void> _loadTokenFromStorage() async {
+  Future<void> _loadTokens() async {
     final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString(_spotifyTokenKey);
-    if (token != null) {
-      _accessToken = token;
-      notifyListeners();
-    }
-  }
-
-  // --- Métodos Públicos ---
-  Future<void> loginSpotify() async {
-    if (_spotifyClientId.isEmpty) {
-      throw Exception('SPOTIFY_CLIENT_ID não encontrado no arquivo .env');
-    }
-
-    final codeVerifier = _generateRandomString(128);
-    final codeChallenge = _generateCodeChallenge(codeVerifier);
-    final scopes = [
-      'user-read-private',
-      'playlist-read-private',
-      'user-library-read'
-    ].join(' ');
-
-    final authUrl = Uri.https('accounts.spotify.com', '/authorize', {
-      'response_type': 'code',
-      'client_id': _spotifyClientId,
-      'redirect_uri': _spotifyRedirectUri,
-      'scope': scopes,
-      'code_challenge_method': 'S256',
-      'code_challenge': codeChallenge,
-    } );
-
-    try {
-      final result = await FlutterWebAuth2.authenticate(
-        url: authUrl.toString(),
-        callbackUrlScheme: _spotifyCallbackScheme,
-      );
-
-      final code = Uri.parse(result).queryParameters['code'];
-
-      if (code != null) {
-        await _exchangeCodeForToken(code, codeVerifier);
-      } else {
-        throw Exception('Código de autorização não retornado pelo Spotify.');
-      }
-    } catch (e) {
-      if (e.toString().contains('CANCELED')) {
-        debugPrint("Login cancelado pelo usuário.");
-        return;
-      }
-      throw Exception('Falha no login: $e');
-    }
-  }
-
-  Future<void> logout() async {
-    _accessToken = null;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_spotifyTokenKey);
-    await prefs.remove(_spotifyRefreshTokenKey);
+    _spotifyAccessToken = prefs.getString(_spotifyTokenKey);
+    _deezerAccessToken = prefs.getString(_deezerTokenKey);
     notifyListeners();
   }
 
-  // --- Métodos Privados ---
-  Future<void> _exchangeCodeForToken(String code, String codeVerifier) async {
+  // --- Métodos de Login ---
+  Future<void> loginSpotify() async {
+    if (_spotifyClientId.isEmpty) throw Exception('SPOTIFY_CLIENT_ID não encontrado');
+    final codeVerifier = _generateRandomString(128);
+    final codeChallenge = _generateCodeChallenge(codeVerifier);
+    final scopes = ['user-read-private', 'playlist-read-private', 'user-library-read'].join(' ');
+    final authUrl = Uri.https('accounts.spotify.com', '/authorize', {
+      'response_type': 'code', 'client_id': _spotifyClientId, 'redirect_uri': _spotifyRedirectUri,
+      'scope': scopes, 'code_challenge_method': 'S256', 'code_challenge': codeChallenge,
+    } );
+    try {
+      final result = await FlutterWebAuth2.authenticate(url: authUrl.toString(), callbackUrlScheme: _spotifyCallbackScheme);
+      final code = Uri.parse(result).queryParameters['code'];
+      if (code != null) await _exchangeSpotifyCode(code, codeVerifier);
+      else throw Exception('Código de autorização não retornado.');
+    } catch (e) { if (e.toString().contains('CANCELED')) return; throw Exception('Falha no login com Spotify: $e'); }
+  }
+
+  Future<void> loginDeezer() async {
+    if (_deezerAppId.isEmpty) throw Exception('DEEZER_APP_ID não encontrado');
+    final authUrl = Uri.https('connect.deezer.com', '/oauth/auth.php', {
+      'app_id': _deezerAppId, 'redirect_uri': _deezerRedirectUri,
+      'perms': 'basic_access,manage_library,offline_access', 'response_type': 'token',
+    } );
+    try {
+      final result = await FlutterWebAuth2.authenticate(url: authUrl.toString(), callbackUrlScheme: _deezerCallbackScheme);
+      final fragment = Uri.parse(result).fragment;
+      final token = Uri.splitQueryString(fragment)['access_token'];
+      if (token != null) {
+        _deezerAccessToken = token;
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_deezerTokenKey, _deezerAccessToken!);
+        notifyListeners();
+      } else { throw Exception('Token do Deezer não encontrado.'); }
+    } catch (e) { if (e.toString().contains('CANCELED')) return; throw Exception('Falha no login com Deezer: $e'); }
+  }
+
+  // --- Métodos de Troca de Token e Logout ---
+  Future<void> _exchangeSpotifyCode(String code, String codeVerifier) async {
     final url = Uri.parse('https://accounts.spotify.com/api/token' );
-
-    final response = await http.post(
-      url,
-      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-      body: {
-        'grant_type': 'authorization_code',
-        'code': code,
-        'redirect_uri': _spotifyRedirectUri,
-        'client_id': _spotifyClientId,
-        'code_verifier': codeVerifier,
-      },
-     );
-
+    final response = await http.post(url, headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: {
+      'grant_type': 'authorization_code', 'code': code, 'redirect_uri': _spotifyRedirectUri,
+      'client_id': _spotifyClientId, 'code_verifier': codeVerifier,
+    } );
     if (response.statusCode == 200) {
       final body = jsonDecode(response.body);
-      _accessToken = body['access_token'];
+      _spotifyAccessToken = body['access_token'];
       final refreshToken = body['refresh_token'];
-
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_spotifyTokenKey, _accessToken!);
-      if (refreshToken != null) {
-        await prefs.setString(_spotifyRefreshTokenKey, refreshToken);
-      }
+      await prefs.setString(_spotifyTokenKey, _spotifyAccessToken!);
+      if (refreshToken != null) await prefs.setString(_spotifyRefreshTokenKey, refreshToken);
       notifyListeners();
-    } else {
-      throw Exception(
-          'Falha ao trocar o código pelo token: ${response.body}');
-    }
+    } else { throw Exception('Falha ao trocar o código do Spotify: ${response.body}'); }
+  }
+
+  Future<void> logout() async {
+    _spotifyAccessToken = null;
+    _deezerAccessToken = null;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_spotifyTokenKey);
+    await prefs.remove(_spotifyRefreshTokenKey);
+    await prefs.remove(_deezerTokenKey);
+    notifyListeners();
   }
 
   // --- Funções de Suporte ao PKCE ---
-  String _generateRandomString(int length) {
-    final random = Random.secure();
-    const chars =
-        'AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz1234567890-._~';
-    return List.generate(length, (index) => chars[random.nextInt(chars.length)])
-        .join();
-  }
-
-  String _generateCodeChallenge(String codeVerifier) {
-    final bytes = utf8.encode(codeVerifier);
-    final digest = sha256.convert(bytes);
-    return base64Url.encode(digest.bytes).replaceAll('=', '');
-  }
+  String _generateRandomString(int length) { final r = Random.secure(); const c = 'AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz1234567890-._~'; return List.generate(length, (_) => c[r.nextInt(c.length)]).join(); }
+  String _generateCodeChallenge(String v) { final b = utf8.encode(v); final d = sha256.convert(b); return base64Url.encode(d.bytes).replaceAll('=', ''); }
 }
 
