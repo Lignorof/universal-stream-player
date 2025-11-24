@@ -1,100 +1,98 @@
 import 'package:flutter/material.dart';
-import 'package:universal_stream_player/api/spotify_api_service.dart';
-import 'package:universal_stream_player/core/auth_service.dart';
-import 'package:universal_stream_player/core/database_service.dart';
-import 'package:universal_stream_player/models/stream_playlist.dart';
-import 'package:universal_stream_player/ui/playlist_screen.dart';
+import 'package:provider/provider.dart';
+import '../core/auth_service.dart';
 
-class HomeScreen extends StatefulWidget {
-  final AuthService authService;
-  const HomeScreen({super.key, required this.authService});
-
-  @override
-  State<HomeScreen> createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends State<HomeScreen> {
-  List<StreamPlaylist> _playlists = [];
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadPlaylists();
-  }
-
-  Future<void> _loadPlaylists() async {
-    setState(() { _isLoading = true; });
-
-    // 1. Carrega do cache primeiro para uma UI rápida
-    final cachedPlaylists = await DatabaseService.instance.getCachedPlaylists();
-    if (mounted) {
-      setState(() {
-        _playlists = cachedPlaylists;
-        _isLoading = false; // Permite que a UI mostre os dados cacheados
-      });
-    }
-
-    // 2. Em segundo plano, busca na API por atualizações
-    try {
-      List<StreamPlaylist> freshPlaylists = [];
-      if (widget.authService.isSpotifyAuthenticated) {
-        final spotifyService = SpotifyApiService(widget.authService.spotifyAccessToken!);
-        freshPlaylists.addAll(await spotifyService.fetchUserPlaylists());
-      }
-      // Adicionar aqui a busca de playlists do Deezer se necessário
-
-      // 3. Atualiza o cache e a UI
-      await DatabaseService.instance.cachePlaylists(freshPlaylists);
-      if (mounted) {
-        setState(() {
-          _playlists = freshPlaylists;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao sincronizar: $e')));
-      }
-    } finally {
-      if (mounted) {
-        setState(() { _isLoading = false; });
-      }
-    }
-  }
+class HomeScreen extends StatelessWidget {
+  const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Minhas Playlists'),
-        actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _loadPlaylists)],
+    return Consumer<AuthService>(
+      builder: (context, authService, child) {
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Universal Stream Player'),
+            actions: [
+              if (authService.isAuthenticated)
+                IconButton(
+                  icon: const Icon(Icons.logout),
+                  tooltip: 'Logout',
+                  onPressed: () {
+                    authService.logout();
+                  },
+                ),
+            ],
+          ),
+          body: Center(
+            child: authService.isAuthenticated
+                ? _buildAuthenticatedUI(context, authService)
+                : _buildLoginUI(context, authService),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildLoginUI(BuildContext context, AuthService authService) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Text(
+          'Bem-vindo!',
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 20),
+        ElevatedButton.icon(
+          icon: const Icon(Icons.login),
+          label: const Text('Login com Spotify'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.green,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+          ),
+          onPressed: () async {
+            try {
+              await authService.loginSpotify();
+            } catch (e) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Erro no login: $e'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAuthenticatedUI(BuildContext context, AuthService authService) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text(
+            'Login bem-sucedido!',
+            style: TextStyle(fontSize: 22, color: Colors.green),
+          ),
+          const SizedBox(height: 20),
+          const Text('Agora você pode implementar a busca de músicas e playlists.'),
+          const SizedBox(height: 40),
+          const Text(
+            'Seu Access Token (sensível, não exiba em um app real):',
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          SelectableText(
+            authService.accessToken ?? 'Nenhum token encontrado',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+        ],
       ),
-      body: _isLoading && _playlists.isEmpty
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _loadPlaylists,
-              child: ListView.builder(
-                itemCount: _playlists.length,
-                itemBuilder: (context, index) {
-                  final playlist = _playlists[index];
-                  return ListTile(
-                    leading: playlist.imageUrl.isNotEmpty
-                        ? Image.network(playlist.imageUrl, width: 50, height: 50, fit: BoxFit.cover)
-                        : const Icon(Icons.music_note, size: 50),
-                    title: Text(playlist.name),
-                    subtitle: Text('por ${playlist.owner} • ${playlist.source}'),
-                    onTap: () {
-                      Navigator.of(context).push(MaterialPageRoute(
-                        builder: (_) => PlaylistScreen(
-                          playlist: playlist,
-                          authService: widget.authService,
-                        ),
-                      ));
-                    },
-                  );
-                },
-              ),
-            ),
     );
   }
 }
+

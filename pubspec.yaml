@@ -1,34 +1,27 @@
+
 name: universal_stream_player
 description: "A music player that integrates all your streaming songbook into a single app."
 publish_to: 'none'
-version: 0.1.0
+version: 1.0.0+1
 
 environment:
-  sdk: '>=3.2.0 <4.0.0' # Recomenda-se uma versão recente do SDK para compatibilidade
+  sdk: '>=3.2.0 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
 
-  # Para fazer a chamada POST para a API do Spotify
+  # --- Autenticação e Rede ---
   http: ^1.2.0
-
-  # Para abrir a janela de autenticação e capturar o callback
-  flutter_web_auth_2: ^3.1.2 # Usando uma versão estável e conhecida
-
-  # Para persistir os tokens de login
-  shared_preferences: ^2.2.2
-
-  # Para gerar os códigos PKCE
+  flutter_web_auth_2: ^3.1.2
   crypto: ^3.0.3
-  
-  # Para ouvir o deep link (embora flutter_web_auth_2 lide com isso )
-  # uni_links: ^0.5.1 # Opcional, pois flutter_web_auth_2 já faz o trabalho
-
-  # Para carregar segredos (Client ID)
   flutter_dotenv: ^5.1.0
 
-  # ... (suas outras dependências de UI)
+  # --- Gerenciamento de Estado e Dados ---
+  provider: ^6.1.2
+  shared_preferences: ^2.2.2
+
+  # --- UI e Utilitários ---
   cupertino_icons: ^1.0.2
 
 dev_dependencies:
@@ -39,7 +32,6 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   
-  # Certifique-se de que o .env está listado como um asset
   assets:
     - .env
 
