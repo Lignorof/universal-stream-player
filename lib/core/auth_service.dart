@@ -31,11 +31,11 @@ class AuthService {
   Future<void> loginSpotify() async {
     final isMobile = Platform.isAndroid || Platform.isIOS;
     final spotifyRedirectUri = isMobile ? 'usp://callback' : 'http://localhost:8080';
-    final callbackUrlScheme = isMobile ? 'usp' : 'http'; // Usando 'http' para desktop
+    final callbackUrlScheme = isMobile ? 'usp' : 'http://localhost:8080'; // Usando 'http://localhost:8080' para desktop
 
     final codeVerifier = _generateRandomString(128 );
     final codeChallenge = _generateCodeChallenge(codeVerifier);
-    final scopes = ['user-read-private', 'playlist-read-private', 'user-library-read', 'offline_access'].join(' ');
+    final scopes = ['user-read-private', 'playlist-read-private', 'user-library-read'].join(' ');
     
     final authUrl = Uri.https('accounts.spotify.com', '/authorize', {
       'response_type': 'code',
@@ -92,7 +92,7 @@ class AuthService {
   Future<void> loginDeezer() async {
     final isMobile = Platform.isAndroid || Platform.isIOS;
     final deezerRedirectUri = isMobile ? 'usp://deezer-callback' : 'http://localhost:8081';
-    final callbackUrlScheme = isMobile ? 'usp' : 'http';
+    final callbackUrlScheme = isMobile ? 'usp' : 'http://localhost:8081';
 
     final authUrl = Uri.https('connect.deezer.com', '/oauth/auth.php', {
       'app_id': _deezerAppId,
