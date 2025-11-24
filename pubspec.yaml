@@ -1,0 +1,40 @@
+name: universal_stream_player
+description: "A music player that integrates all your streaming songbook into a single app."
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: '>=3.2.0 <4.0.0' # Ajustado para compatibilidade com as dependências
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_dotenv: ^5.1.0
+
+
+  # Redes e Autenticação
+  http: ^1.2.0
+  flutter_web_auth_2: ^3.1.2
+  crypto: ^3.0.3 
+  shared_preferences: ^2.2.3
+
+  # Player
+  youtube_explode_dart: ^2.1.0
+  
+  # Banco de Dados e Cache
+  sqflite: ^2.3.2
+  path_provider: ^2.1.2
+  path: ^1.9.0
+
+  # Ícones
+  cupertino_icons: ^1.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  assets: 
+    - .env
