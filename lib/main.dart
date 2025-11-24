@@ -1,58 +1,36 @@
+
 import 'package:flutter/material.dart';
-import 'package:universal_stream_player/core/auth_service.dart';
-import 'package:universal_stream_player/ui/home_screen.dart';
-import 'package:universal_stream_player/ui/login_screen.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:provider/provider.dart'; // Exemplo usando Provider para gerenciar o estado
+import 'core/auth_service.dart';
+import 'ui/home_screen.dart'; // Supondo que você tenha uma tela inicial
 
 Future<void> main() async {
+  // Garante que os widgets do Flutter estejam inicializados
+  WidgetsFlutterBinding.ensureInitialized();
+  // Carrega as variáveis de ambiente do arquivo .env
   await dotenv.load(fileName: ".env");
-
+  
   runApp(const UniversalStreamPlayerApp());
 }
 
-class UniversalStreamPlayerApp extends StatefulWidget {
+class UniversalStreamPlayerApp extends StatelessWidget {
   const UniversalStreamPlayerApp({super.key});
 
   @override
-  State<UniversalStreamPlayerApp> createState() => _UniversalStreamPlayerAppState();
-}
-
-class _UniversalStreamPlayerAppState extends State<UniversalStreamPlayerApp> {
-  final AuthService _authService = AuthService();
-  late Future<void> _initFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _initFuture = _authService.loadAllTokens();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Universal Stream Player',
-      theme: ThemeData.dark().copyWith(
-        colorScheme: const ColorScheme.dark(
-          primary: Colors.deepPurpleAccent,
-          secondary: Colors.tealAccent,
+    // Usar um ChangeNotifierProvider é uma boa prática para gerenciar o AuthService
+    return ChangeNotifierProvider(
+      create: (_) => AuthService(),
+      child: MaterialApp(
+        title: 'Universal Stream Player',
+        theme: ThemeData.dark().copyWith(
+          primaryColor: Colors.green,
+          scaffoldBackgroundColor: const Color(0xFF121212),
         ),
-      ),
-      debugShowCheckedModeBanner: false,
-      home: FutureBuilder(
-        future: _initFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.done) {
-            // Se o usuário estiver autenticado em qualquer serviço, vai para a home.
-            return _authService.isAuthenticated
-                ? HomeScreen(authService: _authService)
-                : LoginScreen(authService: _authService);
-          }
-          // Tela de carregamento enquanto os tokens são verificados
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        },
+        home: const HomeScreen(),
       ),
     );
   }
 }
+

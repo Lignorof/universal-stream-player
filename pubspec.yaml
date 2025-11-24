@@ -4,29 +4,31 @@ publish_to: 'none'
 version: 0.1.0
 
 environment:
-  sdk: '>=3.2.0 <4.0.0' # Ajustado para compatibilidade com as dependências
+  sdk: '>=3.2.0 <4.0.0' # Recomenda-se uma versão recente do SDK para compatibilidade
 
 dependencies:
   flutter:
     sdk: flutter
+
+  # Para fazer a chamada POST para a API do Spotify
+  http: ^1.2.0
+
+  # Para abrir a janela de autenticação e capturar o callback
+  flutter_web_auth_2: ^3.1.2 # Usando uma versão estável e conhecida
+
+  # Para persistir os tokens de login
+  shared_preferences: ^2.2.2
+
+  # Para gerar os códigos PKCE
+  crypto: ^3.0.3
+  
+  # Para ouvir o deep link (embora flutter_web_auth_2 lide com isso )
+  # uni_links: ^0.5.1 # Opcional, pois flutter_web_auth_2 já faz o trabalho
+
+  # Para carregar segredos (Client ID)
   flutter_dotenv: ^5.1.0
 
-
-  # Redes e Autenticação
-  http: ^1.2.0
-  flutter_web_auth_2: ^3.1.2
-  crypto: ^3.0.3 
-  shared_preferences: ^2.2.3
-
-  # Player
-  youtube_explode_dart: ^2.1.0
-  
-  # Banco de Dados e Cache
-  sqflite: ^2.3.2
-  path_provider: ^2.1.2
-  path: ^1.9.0
-
-  # Ícones
+  # ... (suas outras dependências de UI)
   cupertino_icons: ^1.0.2
 
 dev_dependencies:
@@ -36,5 +38,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  assets: 
+  
+  # Certifique-se de que o .env está listado como um asset
+  assets:
     - .env
+
