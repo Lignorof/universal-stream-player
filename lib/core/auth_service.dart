@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'dart:io' show Platform;
 import 'dart:math';
 import 'package:crypto/crypto.dart';
-import 'package:flutter/foundation.dart' show kIsWeb, ChangeNotifier, defaultTargetPlatform, TargetPlatform;
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
 import 'package:http/http.dart' as http;
@@ -10,7 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class AuthService extends ChangeNotifier {
   static final String _spotifyClientId = dotenv.env['SPOTIFY_CLIENT_ID'] ?? '';
   static final String _deezerAppId = dotenv.env['DEEZER_APP_ID'] ?? '';
-  static bool get _isDesktop => !kIsWeb && (defaultTargetPlatform == TargetPlatform.windows || defaultTargetPlatform == TargetPlatform.linux || defaultTargetPlatform == TargetPlatform.macOS );
+  static bool get _isDesktop => !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS );
   static String get _spotifyRedirectUri => _isDesktop ? 'http://127.0.0.1:8000/callback' : 'usp://callback';
   static String get _spotifyCallbackScheme => _isDesktop ? 'http://127.0.0.1:8000' : 'usp';
   static String get _deezerRedirectUri => _isDesktop ? 'http://127.0.0.1:8001/callback' : 'usp://deezer-callback';
@@ -39,10 +41,15 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<void> loginSpotify() async {
-    if (_spotifyClientId.isEmpty) throw Exception('SPOTIFY_CLIENT_ID não encontrado no .env');
+    if (_spotifyClientId.isEmpty) throw Exception('SPOTIFY_CLIENT_ID não encontrado');
     final codeVerifier = _generateRandomString(128);
-    final codeChallenge = _generateCodeChallenge(codeVerifier); // PKCE
-    final scopes = ['user-read-private', 'playlist-read-private', 'user-library-read', 'offline_access'].join(' ');
+    final codeChallenge = _generateCodeChallenge(codeVerifier);
+    
+    final scopes = [
+      'user-read-private',
+      'user-library-read',
+      'playlist-read-private',
+    ].join(' ');
 
     final authUrl = Uri.https('accounts.spotify.com', '/authorize', {
       'response_type': 'code',
@@ -52,7 +59,6 @@ class AuthService extends ChangeNotifier {
       'code_challenge_method': 'S256',
       'code_challenge': codeChallenge,
     } );
-
     try {
       final result = await FlutterWebAuth2.authenticate(url: authUrl.toString(), callbackUrlScheme: _spotifyCallbackScheme);
       final code = Uri.parse(result).queryParameters['code'];
@@ -62,21 +68,20 @@ class AuthService extends ChangeNotifier {
         throw Exception('Código de autorização não retornado.');
       }
     } catch (e) {
-      if (e.toString().contains('CANCELED')) return; // O usuário cancelou, não é um erro.
+      if (e.toString().contains('CANCELED')) return;
       throw Exception('Falha no login com Spotify: $e');
     }
   }
 
+  // ADICIONADO DE VOLTA
   Future<void> loginDeezer() async {
-    if (_deezerAppId.isEmpty) throw Exception('DEEZER_APP_ID não encontrado no .env');
-
+    if (_deezerAppId.isEmpty) throw Exception('DEEZER_APP_ID não encontrado');
     final authUrl = Uri.https('connect.deezer.com', '/oauth/auth.php', {
       'app_id': _deezerAppId,
       'redirect_uri': _deezerRedirectUri,
-      'perms': 'basic_access,manage_library', // Escopos para Deezer
-      'response_type': 'token', // Deezer usa o fluxo implícito, mais simples
+      'perms': 'basic_access,manage_library',
+      'response_type': 'token',
     } );
-
     try {
       final result = await FlutterWebAuth2.authenticate(url: authUrl.toString(), callbackUrlScheme: _deezerCallbackScheme);
       final fragment = Uri.parse(result).fragment;
@@ -97,7 +102,6 @@ class AuthService extends ChangeNotifier {
 
   Future<void> _exchangeSpotifyCode(String code, String codeVerifier) async {
     final url = Uri.parse('https://accounts.spotify.com/api/token' );
-
     final response = await http.post(url, headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: {
       'grant_type': 'authorization_code',
       'code': code,
@@ -105,12 +109,10 @@ class AuthService extends ChangeNotifier {
       'client_id': _spotifyClientId,
       'code_verifier': codeVerifier,
     } );
-
     if (response.statusCode == 200) {
       final body = jsonDecode(response.body);
       _spotifyAccessToken = body['access_token'];
       final refreshToken = body['refresh_token'];
-
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_spotifyTokenKey, _spotifyAccessToken!);
       if (refreshToken != null) {
@@ -125,29 +127,24 @@ class AuthService extends ChangeNotifier {
   Future<String?> refreshSpotifyToken() async {
     final prefs = await SharedPreferences.getInstance();
     final refreshToken = prefs.getString(_spotifyRefreshTokenKey);
-
     if (refreshToken == null) {
       await logout();
       return null;
     }
-
     final url = Uri.parse('https://accounts.spotify.com/api/token' );
     final response = await http.post(url, headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: {
       'grant_type': 'refresh_token',
       'refresh_token': refreshToken,
       'client_id': _spotifyClientId,
     } );
-
     if (response.statusCode == 200) {
       final body = jsonDecode(response.body);
       _spotifyAccessToken = body['access_token'];
       final newRefreshToken = body['refresh_token'];
-
       await prefs.setString(_spotifyTokenKey, _spotifyAccessToken!);
       if (newRefreshToken != null) {
         await prefs.setString(_spotifyRefreshTokenKey, newRefreshToken);
       }
-      
       notifyListeners();
       return _spotifyAccessToken;
     } else {

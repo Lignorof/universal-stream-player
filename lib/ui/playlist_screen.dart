@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../core/auth_service.dart';
-import '../core/stream_playlist.dart';
-import '../core/stream_track.dart';
-import '../core/spotify_api_service.dart';
-import '../core/audio_player_service.dart';
+import 'package:universal_stream_player/core/auth_service.dart';
+import 'package:universal_stream_player/core/spotify_api_service.dart';
+import 'package:universal_stream_player/core/stream_playlist.dart';
+import 'package:universal_stream_player/core/stream_track.dart';
+import 'package:universal_stream_player/core/audio_player_service.dart';
 
 class PlaylistScreen extends StatefulWidget {
   final StreamPlaylist playlist;
-  // CORREÇÃO: Recebe o AuthService inteiro
+  // CORREÇÃO: Recebe o AuthService completo
   final AuthService authService;
 
   const PlaylistScreen({
@@ -27,21 +27,20 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
   @override
   void initState() {
     super.initState();
-    // Por enquanto, só sabemos carregar tracks do Spotify
-    if (widget.playlist.source == 'spotify' && widget.authService.isSpotifyAuthenticated) {
-      final spotifyService = SpotifyApiService(widget.authService.spotifyAccessToken!, widget.authService);
-      _tracksFuture = spotifyService.getPlaylistTracks(widget.playlist.id);
-    } else {
-      // Se a playlist for do Deezer ou o usuário não estiver logado no Spotify,
-      // retorna uma lista vazia por enquanto.
-      _tracksFuture = Future.value([]);
-    }
+    // Usa o authService recebido para criar o SpotifyApiService
+    final spotifyService = SpotifyApiService(
+      widget.authService.spotifyAccessToken!,
+      widget.authService,
+    );
+    _tracksFuture = spotifyService.getPlaylistTracks(widget.playlist.id);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.playlist.name)),
+      appBar: AppBar(
+        title: Text(widget.playlist.name),
+      ),
       body: FutureBuilder<List<StreamTrack>>(
         future: _tracksFuture,
         builder: (context, snapshot) {
@@ -49,11 +48,12 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-            return Center(child: Text('Ocorreu um erro: ${snapshot.error}'));
+            return Center(child: Text('Erro ao carregar músicas: ${snapshot.error}'));
           }
           if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return const Center(child: Text('Nenhuma música encontrada nesta playlist.'));
           }
+
           final tracks = snapshot.data!;
           return ListView.builder(
             itemCount: tracks.length,
@@ -66,7 +66,6 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                 title: Text(track.name),
                 subtitle: Text(track.artist),
                 onTap: () {
-                  // Usa o Provider para acessar o AudioPlayerService
                   context.read<AudioPlayerService>().play(track);
                 },
               );

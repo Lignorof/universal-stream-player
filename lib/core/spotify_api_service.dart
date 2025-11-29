@@ -1,4 +1,3 @@
-
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'auth_service.dart';
@@ -12,14 +11,14 @@ class SpotifyApiService {
 
   SpotifyApiService(this._accessToken, this._authService );
 
-  Future<T> _handleRequest<T>(Future<http.Response> Function( ) request, T Function(dynamic) onSuccess) async {
-    var response = await request();
+  Future<T> _handleApiCall<T>(Future<http.Response> Function( ) apiCall, T Function(dynamic) onSuccess) async {
+    var response = await apiCall();
     if (response.statusCode == 401) {
       final newAccessToken = await _authService.refreshSpotifyToken();
       if (newAccessToken != null) {
-        response = await request(); // Tenta novamente com o novo token
+        response = await apiCall(); // Tenta novamente com o novo token
       } else {
-        throw Exception('Sessão expirada. Por favor, faça login novamente.');
+        throw Exception('Não foi possível renovar a sessão. Faça login novamente.');
       }
     }
     if (response.statusCode == 200) {
@@ -30,33 +29,19 @@ class SpotifyApiService {
     }
   }
 
-  Future<List<R>> _fetchPagedData<R>(String endpoint, R Function(Map<String, dynamic>) fromJson) async {
-    return _handleRequest(() async {
-      return http.get(
-        Uri.parse('$_baseUrl/$endpoint' ),
-        headers: {'Authorization': 'Bearer $_accessToken'},
-      );
-    }, (data) {
-      final itemsList = (data['items'] as List?) ?? [];
-      // --- CORREÇÃO DEFINITIVA PARA O ERRO DE TYPE CAST ---
-      // Filtra itens onde o campo 'track' é nulo ANTES de tentar o parse.
-      return itemsList
-          .where((item) => item['track'] != null)
-          .map((item) => fromJson(item as Map<String, dynamic>))
-          .toList();
-    });
+  Future<List<T>> _fetchPagedData<T>(String endpoint, T Function(Map<String, dynamic>) fromJson) async {
+    return _handleApiCall(
+      () => http.get(Uri.parse('$_baseUrl/$endpoint' ), headers: {'Authorization': 'Bearer $_accessToken'}),
+      (data) {
+        final items = data['items'] as List?;
+        if (items == null) return <T>[];
+        return items.map((itemJson) => fromJson(itemJson as Map<String, dynamic>)).toList();
+      },
+    );
   }
 
   Future<List<StreamPlaylist>> getCurrentUserPlaylists() async {
-    return _handleRequest(() async {
-      return http.get(
-        Uri.parse('$_baseUrl/me/playlists?limit=50' ),
-        headers: {'Authorization': 'Bearer $_accessToken'},
-      );
-    }, (data) {
-      final itemsList = (data['items'] as List?) ?? [];
-      return itemsList.map((item) => StreamPlaylist.fromSpotifyJson(item)).toList();
-    });
+    return _fetchPagedData('me/playlists?limit=50', (json) => StreamPlaylist.fromSpotifyJson(json));
   }
 
   Future<List<StreamTrack>> getSavedTracks() async {
@@ -64,7 +49,7 @@ class SpotifyApiService {
   }
 
   Future<List<StreamTrack>> getPlaylistTracks(String playlistId) async {
-    final cleanPlaylistId = Uri.encodeComponent(playlistId);
+    final cleanPlaylistId = playlistId.split(':').last;
     return _fetchPagedData('playlists/$cleanPlaylistId/tracks?limit=100', (json) => StreamTrack.fromSpotifyJson(json));
   }
 }

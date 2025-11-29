@@ -1,62 +1,48 @@
+
+import 'package:youtube_explode_dart/youtube_explode_dart.dart' as yt;
+
 class StreamTrack {
+  final String id;
   final String name;
   final String artist;
-  final String albumName;
   final String imageUrl;
-  final bool isPlayable;
+  final String source; // 'spotify' ou 'youtube'
 
   StreamTrack({
+    required this.id,
     required this.name,
     required this.artist,
-    required this.albumName,
     required this.imageUrl,
-    this.isPlayable = true,
+    required this.source,
   });
 
-  /// Construtor para dados vindos da API do Spotify.
-  /// Ele é projetado para receber o objeto que está DENTRO da chave 'track'.
-  factory StreamTrack.fromSpotifyJson(Map<String, dynamic>? trackData) {
-    // Se o objeto track inteiro for nulo, ou não tiver um ID, é uma faixa inválida.
-    if (trackData == null || trackData['id'] == null) {
-      return StreamTrack(
-        name: 'Faixa indisponível',
-        artist: '',
-        albumName: '',
-        imageUrl: '',
-        isPlayable: false,
-      );
-    }
+  // Construtor Universal para dados vindos da API do Spotify
+  factory StreamTrack.fromSpotifyJson(Map<String, dynamic> json) {
+    final track = json['track'] ?? json; // Pode vir aninhado ou não
+    if (track.isEmpty) return StreamTrack(id: '', name: 'Faixa indisponível', artist: '', imageUrl: '', source: 'spotify');
 
-    final artistName = (trackData['artists'] as List? ?? [])
-        .map((artist) => artist['name'])
-        .join(', ');
-    final album = trackData['album'] ?? {};
+    final artistName = (track['artists'] as List).map((artist) => artist['name']).join(', ');
+    final album = track['album'] ?? {};
     final images = album['images'] as List? ?? [];
 
     return StreamTrack(
-      name: trackData['name'] ?? 'Faixa Sem Nome',
+      id: track['id'] ?? '',
+      name: track['name'] ?? 'Faixa Sem Nome',
       artist: artistName,
-      albumName: album['name'] ?? 'Álbum Desconhecido',
       imageUrl: images.isNotEmpty ? images[0]['url'] : '',
+      source: 'spotify',
     );
   }
 
-  // ... (outros construtores sem alteração)
-  factory StreamTrack.fromDeezerJson(Map<String, dynamic> json) {
+  // Construtor para dados vindos da API do YouTube
+  factory StreamTrack.fromYouTubeVideo(yt.Video video) {
     return StreamTrack(
-      name: json['title'] ?? '', artist: json['artist']?['name'] ?? '',
-      albumName: json['album']?['title'] ?? '', imageUrl: json['album']?['cover_medium'] ?? '',
+      id: video.id.value,
+      name: video.title,
+      artist: video.author,
+      imageUrl: video.thumbnails.mediumResUrl,
+      source: 'youtube',
     );
   }
-  factory StreamTrack.fromDbJson(Map<String, dynamic> json) {
-    return StreamTrack(
-      name: json['name'], artist: json['artist'],
-      albumName: json['albumName'], imageUrl: json['imageUrl'],
-    );
-  }
-  Map<String, dynamic> toDbJson(String playlistId) => {
-    'playlistId': playlistId, 'name': name, 'artist': artist,
-    'albumName': albumName, 'imageUrl': imageUrl,
-  };
 }
 
