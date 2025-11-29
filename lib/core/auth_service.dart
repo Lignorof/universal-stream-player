@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io' show Platform;
 import 'dart:math';
-
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -11,40 +10,24 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService extends ChangeNotifier {
-  // --- Configuração de Credenciais ---
   static final String _spotifyClientId = dotenv.env['SPOTIFY_CLIENT_ID'] ?? '';
   static final String _deezerAppId = dotenv.env['DEEZER_APP_ID'] ?? '';
-
-  // --- Lógica de Detecção de Plataforma Universal ---
-  static bool get _isDesktop =>
-      !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS );
-
-  // --- Configurações do Spotify ---
-  static String get _spotifyRedirectUri =>
-      _isDesktop ? 'http://127.0.0.1:8000/callback' : 'usp://callback';
-  
-  static String get _spotifyCallbackScheme => 
-      _isDesktop ? 'http://127.0.0.1:8000' : 'usp';
-
-  // --- Configurações do Deezer ---
-  static String get _deezerRedirectUri =>
-      _isDesktop ? 'http://127.0.0.1:8001/callback' : 'usp://deezer-callback';
-  
-  static String get _deezerCallbackScheme => 
-      _isDesktop ? 'http://127.0.0.1:8001' : 'usp';
-
-  // --- Chaves e Estado de Autenticação ---
+  static bool get _isDesktop => !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS );
+  static String get _spotifyRedirectUri => _isDesktop ? 'http://127.0.0.1:8000/callback' : 'usp://callback';
+  static String get _spotifyCallbackScheme => _isDesktop ? 'http://127.0.0.1:8000' : 'usp';
+  static String get _deezerRedirectUri => _isDesktop ? 'http://127.0.0.1:8001/callback' : 'usp://deezer-callback';
+  static String get _deezerCallbackScheme => _isDesktop ? 'http://127.0.0.1:8001' : 'usp';
   static const String _spotifyTokenKey = 'usp_spotify_access_token';
   static const String _spotifyRefreshTokenKey = 'usp_spotify_refresh_token';
   static const String _deezerTokenKey = 'usp_deezer_access_token';
 
   String? _spotifyAccessToken;
   String? _deezerAccessToken;
+  String? get spotifyAccessToken => _spotifyAccessToken; // Getter para uso interno e passagem para serviços
   bool get isSpotifyAuthenticated => _spotifyAccessToken != null;
   bool get isDeezerAuthenticated => _deezerAccessToken != null;
   bool get isAuthenticated => isSpotifyAuthenticated || isDeezerAuthenticated;
 
-  // --- Construtor e Métodos de Ciclo de Vida ---
   AuthService( ) { _loadTokens(); }
 
   Future<void> _loadTokens() async {
@@ -54,7 +37,6 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // --- Métodos de Login ---
   Future<void> loginSpotify() async {
     if (_spotifyClientId.isEmpty) throw Exception('SPOTIFY_CLIENT_ID não encontrado');
     final codeVerifier = _generateRandomString(128);
@@ -91,7 +73,6 @@ class AuthService extends ChangeNotifier {
     } catch (e) { if (e.toString().contains('CANCELED')) return; throw Exception('Falha no login com Deezer: $e'); }
   }
 
-  // --- Métodos de Troca de Token e Logout ---
   Future<void> _exchangeSpotifyCode(String code, String codeVerifier) async {
     final url = Uri.parse('https://accounts.spotify.com/api/token' );
     final response = await http.post(url, headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: {
@@ -109,17 +90,57 @@ class AuthService extends ChangeNotifier {
     } else { throw Exception('Falha ao trocar o código do Spotify: ${response.body}'); }
   }
 
-  Future<void> logout() async {
-    _spotifyAccessToken = null;
-    _deezerAccessToken = null;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_spotifyTokenKey);
-    await prefs.remove(_spotifyRefreshTokenKey);
-    await prefs.remove(_deezerTokenKey);
-    notifyListeners();
-  }
+ /// Usa o refresh token para obter um novo access token sem precisar de um novo login.
+ Future<String?> refreshSpotifyToken() async {
+   final prefs = await SharedPreferences.getInstance();
+   final refreshToken = prefs.getString(_spotifyRefreshTokenKey);
 
-  // --- Funções de Suporte ao PKCE ---
+   if (refreshToken == null) {
+     // Se não há refresh token, força o logout para um novo login completo.
+     await logout();
+     return null;
+   }
+
+   final url = Uri.parse('https://accounts.spotify.com/api/token' );
+   final response = await http.post(url, headers: {
+     'Content-Type': 'application/x-www-form-urlencoded'
+   }, body: {
+     'grant_type': 'refresh_token',
+     'refresh_token': refreshToken,
+     'client_id': _spotifyClientId,
+   } );
+
+   if (response.statusCode == 200) {
+     final body = jsonDecode(response.body);
+     _spotifyAccessToken = body['access_token'];
+     // A API pode ou não retornar um novo refresh token. Se retornar, salve-o.
+     final newRefreshToken = body['refresh_token'];
+
+     await prefs.setString(_spotifyTokenKey, _spotifyAccessToken!);
+     if (newRefreshToken != null) {
+       await prefs.setString(_spotifyRefreshTokenKey, newRefreshToken);
+     }
+     
+     notifyListeners(); // Notifica a UI que um novo token está disponível
+     return _spotifyAccessToken;
+   } else {
+     // Se a renovação falhar (ex: refresh token revogado), força o logout.
+     await logout();
+     return null;
+   }
+ }
+
+ /// Limpa todos os tokens salvos e notifica os listeners para atualizar a UI.
+ Future<void> logout() async {
+   _spotifyAccessToken = null;
+   _deezerAccessToken = null;
+   final prefs = await SharedPreferences.getInstance();
+   await prefs.remove(_spotifyTokenKey);
+   await prefs.remove(_spotifyRefreshTokenKey);
+   await prefs.remove(_deezerTokenKey);
+   notifyListeners(); // Essencial para a UI reagir e voltar para a tela de login
+ }
+
   String _generateRandomString(int length) { final r = Random.secure(); const c = 'AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz1234567890-._~'; return List.generate(length, (_) => c[r.nextInt(c.length)]).join(); }
   String _generateCodeChallenge(String v) { final b = utf8.encode(v); final d = sha256.convert(b); return base64Url.encode(d.bytes).replaceAll('=', ''); }
 }

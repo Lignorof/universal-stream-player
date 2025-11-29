@@ -1,25 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
-import '../model/stream_track.dart';
+import 'stream_track.dart';
 
 class AudioPlayerService extends ChangeNotifier {
   final AudioPlayer _audioPlayer = AudioPlayer();
   final YoutubeExplode _yt = YoutubeExplode();
-
   StreamTrack? _currentTrack;
   StreamTrack? get currentTrack => _currentTrack;
 
-  bool get isPlaying => _audioPlayer.playing;
+  Stream<bool> get isPlayingStream => _audioPlayer.playingStream;
   Stream<PlayerState> get playerStateStream => _audioPlayer.playerStateStream;
-
-  // --- NOVOS STREAMS E MÉTODOS PARA VOLUME ---
+  Stream<Duration> get positionStream => _audioPlayer.positionStream;
+  Stream<Duration?> get durationStream => _audioPlayer.durationStream;
   Stream<double> get volumeStream => _audioPlayer.volumeStream;
-  Future<void> setVolume(double volume) => _audioPlayer.setVolume(volume);
-  // -----------------------------------------
 
   Future<void> play(StreamTrack track) async {
-    // ... (lógica de play sem alterações) ...
     if (_currentTrack?.name == track.name && _currentTrack?.artist == track.artist) {
       if (!_audioPlayer.playing) _audioPlayer.play();
       return;
@@ -41,13 +37,16 @@ class AudioPlayerService extends ChangeNotifier {
     }
   }
 
-  void pause() => _audioPlayer.pause();
-  void resume() => _audioPlayer.play();
-  void stop() {
+  Future<void> pause() => _audioPlayer.pause();
+  Future<void> resume() => _audioPlayer.play();
+  Future<void> stop() {
     _audioPlayer.stop();
     _currentTrack = null;
     notifyListeners();
+    return Future.value();
   }
+  Future<void> seek(Duration position) => _audioPlayer.seek(position);
+  Future<void> setVolume(double volume) => _audioPlayer.setVolume(volume);
 
   @override
   void dispose() {

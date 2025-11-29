@@ -29,6 +29,14 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
+    packagingOptions {
+        pickFirsts += listOf(
+            "lib/x86/libvlc.so",
+            "lib/x86_64/libvlc.so",
+            "lib/arm64-v8a/libvlc.so",
+            "lib/armeabi-v7a/libvlc.so"
+    )
+    }
 
     buildTypes {
         release {

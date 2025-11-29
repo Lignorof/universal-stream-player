@@ -1,0 +1,381 @@
+--- a/lib/core/audio_player_service.dart
++++ b/lib/core/audio_player_service.dart
+@@ -1,5 +1,5 @@
+ import 'package:flutter/material.dart';
+-import 'package:just_audio/just_audio.dart' as just;
++import 'package:just_audio/just_audio.dart';
+ import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+ import 'stream_track.dart';
+ 
+@@ -16,61 +16,15 @@
+   Future<void> dispose();
+ }
+ 
+-// Implementação para just_audio (Mobile)
+-class JustAudioAdapter implements PlayerAdapter {
+-  final _player = just.AudioPlayer();
+-  @override
+-  Stream<bool> get isPlayingStream => _player.playingStream;
+-  @override
+-  Stream<Duration> get positionStream => _player.positionStream;
+-  @override
+-  Stream<Duration> get durationStream => _player.durationStream.map((d) => d ?? Duration.zero);
+-  @override
+-  Stream<double> get volumeStream => _player.volumeStream;
+-  @override
+-  Future<void> play(String url) => _player.setUrl(url).then((_) => _player.play());
+-  @override
+-  Future<void> pause() => _player.pause();
+-  @override
+-  Future<void> resume() => _player.play();
+-  @override
+-  Future<void> stop() => _player.stop();
+-  @override
+-  Future<void> seek(Duration position) => _player.seek(position);
+-  @override
+-  Future<void> setVolume(double volume) => _player.setVolume(volume);
+-  @override
+-  Future<void> dispose() => _player.dispose();
+-}
+-
+-// Implementação para dart_vlc (Desktop)
+-class VlcAdapter implements PlayerAdapter {
+-  final _player = vlc.Player(id: 69420);
+-  @override
+-  Stream<bool> get isPlayingStream => _player.playbackStream.map((s) => s.isPlaying);
+-  @override
+-  Stream<Duration> get positionStream => _player.positionStream.map((s) => s.position ?? Duration.zero);
+-  @override
+-  Stream<Duration> get durationStream => _player.positionStream.map((s) => s.duration ?? Duration.zero);
+-  @override
+-  Stream<double> get volumeStream => _player.generalStream.map((s) => s.volume);
+-  @override
+-  Future<void> play(String url) async {
+-    _player.open(vlc.Media.network(url), autoStart: true);
+-  }
+-  @override
+-  Future<void> pause() async => _player.pause();
+-  @override
+-  Future<void> resume() async => _player.play();
+-  @override
+-  Future<void> stop() async => _player.stop();
+-  @override
+-  Future<void> seek(Duration position) async => _player.seek(position);
+-  @override
+-  Future<void> setVolume(double volume) async => _player.setVolume(volume);
+-  @override
+-  Future<void> dispose() async => _player.dispose();
+-}
+-
+ class AudioPlayerService extends ChangeNotifier {
+-  static bool get _isDesktop => !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
+-  
+-  late final PlayerAdapter _player;
++  final AudioPlayer _audioPlayer = AudioPlayer();
+   final YoutubeExplode _yt = YoutubeExplode();
+   StreamTrack? _currentTrack;
+   StreamTrack? get currentTrack => _currentTrack;
+ 
+-  // Streams que delegam para o adapter correto
+-  Stream<bool> get isPlayingStream => _player.isPlayingStream;
+-  Stream<Duration> get positionStream => _player.positionStream;
+-  Stream<Duration> get durationStream => _player.durationStream;
+-  Stream<double> get volumeStream => _player.volumeStream;
+-
+-  AudioPlayerService() {
+-    // Escolhe o player correto na inicialização
+-    _player = _isDesktop ? VlcAdapter() : JustAudioAdapter();
+-  }
++  Stream<bool> get isPlayingStream => _audioPlayer.playingStream;
++  Stream<PlayerState> get playerStateStream => _audioPlayer.playerStateStream;
++  Stream<Duration> get positionStream => _audioPlayer.positionStream;
++  Stream<Duration?> get durationStream => _audioPlayer.durationStream;
++  Stream<double> get volumeStream => _audioPlayer.volumeStream;
+ 
+   Future<void> play(StreamTrack track) async {
+     if (_currentTrack?.name == track.name && _currentTrack?.artist == track.artist) {
+-      await _player.resume();
++      if (!_audioPlayer.playing) _audioPlayer.play();
+       return;
+     }
+     _currentTrack = track;
+@@ -80,7 +34,8 @@
+       final video = (await _yt.search.search(searchQuery)).first;
+       final manifest = await _yt.videos.streamsClient.getManifest(video.id);
+       final audioUrl = manifest.audioOnly.withHighestBitrate().url;
+-      await _player.play(audioUrl.toString());
++      await _audioPlayer.setUrl(audioUrl.toString());
++      _audioPlayer.play();
+     } catch (e) {
+       print('Erro ao tocar a música: $e');
+       _currentTrack = null;
+@@ -89,22 +44,22 @@
+     }
+   }
+ 
+-  Future<void> pause() => _player.pause();
+-  Future<void> resume() => _player.resume();
++  Future<void> pause() => _audioPlayer.pause();
++  Future<void> resume() => _audioPlayer.play();
+   Future<void> stop() {
+-    _player.stop();
++    _audioPlayer.stop();
+     _currentTrack = null;
+     notifyListeners();
+     return Future.value();
+   }
+-  Future<void> seek(Duration position) => _player.seek(position);
+-  Future<void> setVolume(double volume) => _player.setVolume(volume);
++  Future<void> seek(Duration position) => _audioPlayer.seek(position);
++  Future<void> setVolume(double volume) => _audioPlayer.setVolume(volume);
+ 
+   @override
+   void dispose() {
+     _yt.close();
+-    _player.dispose();
++    _audioPlayer.dispose();
+     super.dispose();
+   }
+ }
+--- a/lib/core/spotify_api_service.dart
++++ b/lib/core/spotify_api_service.dart
+@@ -32,9 +32,9 @@
+     }, (data) {
+       final itemsList = (data['items'] as List?) ?? [];
+       // --- CORREÇÃO DEFINITIVA PARA O ERRO DE TYPE CAST ---
+-      // Filtra itens onde o campo 'track' é nulo ANTES de tentar o parse.
++      // Filtra itens onde o campo 'track' é nulo (ex: podcasts) ANTES de tentar o parse.
+       return itemsList
+-          .where((item) => item['track'] != null)
+           .map((item) => fromJson(item as Map<String, dynamic>))
+           .toList();
+     });
+@@ -47,15 +47,23 @@
+         headers: {'Authorization': 'Bearer $_accessToken'},
+       );
+     }, (data) {
+-      final itemsList = (data['items'] as List?) ?? [];
+-      return itemsList.map((item) => StreamPlaylist.fromSpotifyJson(item)).toList();
++      final itemsList = (data['items'] as List?);
++      if (itemsList == null) return <StreamPlaylist>[];
++      return itemsList
++          .map((item) => StreamPlaylist.fromSpotifyJson(item))
++          .toList();
+     });
+   }
+ 
+   Future<List<StreamTrack>> getSavedTracks() async {
+-    return _fetchPagedData('me/tracks?limit=50', (json) => StreamTrack.fromSpotifyJson(json));
++    // O endpoint 'me/tracks' tem um formato diferente, o item já é o objeto que queremos
++    return _fetchPagedData('me/tracks?limit=50', (json) => StreamTrack.fromSpotifySavedTrackJson(json));
+   }
+ 
+   Future<List<StreamTrack>> getPlaylistTracks(String playlistId) async {
+     final cleanPlaylistId = Uri.encodeComponent(playlistId);
+-    return _fetchPagedData('playlists/$cleanPlaylistId/tracks?limit=100', (json) => StreamTrack.fromSpotifyJson(json));
++    // O endpoint de tracks de playlist também tem o formato { "track": { ... } }
++    return _fetchPagedData(
++        'playlists/$cleanPlaylistId/tracks?limit=100', (json) => StreamTrack.fromSpotifySavedTrackJson(json));
+   }
+ }
+--- a/lib/core/stream_track.dart
++++ b/lib/core/stream_track.dart
+@@ -14,8 +14,9 @@
+     required this.imageUrl,
+   });
+ 
+-  // Construtor para dados vindos da API do Spotify
+-  factory StreamTrack.fromSpotifyJson(Map<String, dynamic> json) {
++  // Construtor para dados vindos de 'me/tracks' ou 'playlists/{id}/tracks'
++  factory StreamTrack.fromSpotifySavedTrackJson(Map<String, dynamic> json) {
++    // O objeto da música está aninhado dentro de uma chave 'track'
+     final track = json['track'] ?? {};
+     if (track.isEmpty) return StreamTrack(name: 'Faixa indisponível', artist: '', albumName: '', imageUrl: '');
+ 
+--- a/lib/main.dart
++++ b/lib/main.dart
+@@ -1,10 +1,8 @@
+ import 'dart:io';
+-import 'package:dart_vlc/dart_vlc.dart';
+ import 'package:flutter/material.dart';
+ import 'package:flutter_dotenv/flutter_dotenv.dart';
+ import 'package:provider/provider.dart';
+ import 'core/auth_service.dart';
+-import 'core/audio_player_service.dart';
+ import 'ui/home_screen.dart';
+ 
+ class MyHttpOverrides extends HttpOverrides {
+@@ -17,16 +15,11 @@
+ 
+ Future<void> main() async {
+   WidgetsFlutterBinding.ensureInitialized();
+-  if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+-    DartVLC.initialize();
+-  }
+   HttpOverrides.global = MyHttpOverrides();
+   await dotenv.load(fileName: ".env");
+   runApp(
+     MultiProvider(
+       providers: [
+         ChangeNotifierProvider(create: (_) => AuthService()),
+-        ChangeNotifierProvider(create: (_) => AudioPlayerService()),
+       ],
+       child: const UniversalStreamPlayerApp(),
+     ),
+--- a/lib/ui/home_screen.dart
++++ b/lib/ui/home_screen.dart
+@@ -1,6 +1,7 @@
+ import 'dart:io' show Platform;
+ import 'package:flutter/foundation.dart' show kIsWeb;
+ import 'package:flutter/material.dart';
++import 'package:just_audio/just_audio.dart';
+ import 'package:provider/provider.dart';
+ import '../core/auth_service.dart';
+ import '../core/audio_player_service.dart';
+@@ -12,9 +13,14 @@
+   @override
+   Widget build(BuildContext context) {
+     return Consumer<AuthService>(
+       builder: (context, authService, child) {
+-        return Scaffold(
+-          body: authService.isSpotifyAuthenticated
+-              ? LibraryScreen(accessToken: authService.spotifyAccessToken!)
+-              : const LoginScreen(),
+-          bottomNavigationBar: authService.isSpotifyAuthenticated ? const MiniPlayer() : null,
++        return ChangeNotifierProvider(
++          create: (_) => AudioPlayerService(),
++          child: Scaffold(
++            body: authService.isAuthenticated
++                ? const LibraryScreen()
++                : const LoginScreen(),
++            bottomNavigationBar:
++                authService.isAuthenticated ? const MiniPlayer() : null,
++          ),
+         );
+       },
+     );
+@@ -62,7 +68,7 @@
+   }
+ 
+   @override
+-  Widget build(BuildContext context) {
++  Widget build(BuildContext context) { // O build do MiniPlayer
+     final audioPlayer = context.watch<AudioPlayerService>();
+     final track = audioPlayer.currentTrack;
+ 
+@@ -75,10 +81,10 @@
+         children: [
+           StreamBuilder<Duration>(
+             stream: audioPlayer.positionStream,
+             builder: (context, positionSnapshot) {
+-              return StreamBuilder<Duration>(
++              return StreamBuilder<Duration?>(
+                 stream: audioPlayer.durationStream,
+                 builder: (context, durationSnapshot) {
+                   final position = positionSnapshot.data ?? Duration.zero;
+@@ -144,18 +150,24 @@
+                       },
+                     ),
+                   ),
+-                StreamBuilder<bool>(
+-                  stream: audioPlayer.isPlayingStream,
++                StreamBuilder<PlayerState>(
++                  stream: audioPlayer.playerStateStream,
+                   builder: (context, snapshot) {
+-                    final isPlaying = snapshot.data ?? false;
++                    final playerState = snapshot.data;
++                    final isPlaying = playerState?.playing ?? false;
++                    final processingState = playerState?.processingState;
++                    if (processingState == ProcessingState.loading ||
++                        processingState == ProcessingState.buffering) {
++                      return const SizedBox(
++                          width: 48,
++                          height: 48,
++                          child: Center(
++                              child: SizedBox(
++                                  width: 24,
++                                  height: 24,
++                                  child: CircularProgressIndicator(strokeWidth: 2))));
++                    }
+                     return IconButton(
+                       iconSize: 32,
+                       icon: Icon(isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled),
+--- a/lib/ui/library_screen.dart
++++ b/lib/g/lib/ui/library_screen.dart
+@@ -1,6 +1,5 @@
+ import 'package:flutter/material.dart';
+ import 'package:provider/provider.dart';
+-import '../core/auth_service.dart';
+ import '../core/stream_playlist.dart';
+ import '../core/stream_track.dart';
+ import '../core/spotify_api_service.dart';
+@@ -8,11 +7,7 @@
+ import 'playlist_screen.dart';
+ 
+ class LibraryScreen extends StatefulWidget {
+-  final String accessToken;
+-
+-  const LibraryScreen({super.key, required this.accessToken});
+-
++  const LibraryScreen({super.key});
+   @override
+   State<LibraryScreen> createState() => _LibraryScreenState();
+ }
+@@ -20,13 +15,12 @@
+ class _LibraryScreenState extends State<LibraryScreen>
+     with SingleTickerProviderStateMixin {
+   late TabController _tabController;
+-  late SpotifyApiService _apiService;
+   late Future<List<StreamPlaylist>> _playlistsFuture;
+   late Future<List<StreamTrack>> _tracksFuture;
+ 
+   @override
+   void initState() {
+     super.initState();
+-    final authService = context.read<AuthService>();
+-    _apiService = SpotifyApiService(widget.accessToken, authService);
+-    _playlistsFuture = _apiService.getCurrentUserPlaylists();
+-    _tracksFuture = _apiService.getSavedTracks();
+     _tabController = TabController(length: 2, vsync: this);
++    _loadData();
++  }
++
++  void _loadData() {
++    final authService = context.read<AuthService>();
++    final spotifyService = SpotifyApiService(authService.spotifyAccessToken!, authService);
++    // TODO: Adicionar lógica para carregar do Deezer também
++    _playlistsFuture = spotifyService.getCurrentUserPlaylists();
++    _tracksFuture = spotifyService.getSavedTracks();
+   }
+ 
+   @override
+--- a/pubspec.yaml
++++ b/pubspec.yaml
+@@ -12,25 +12,20 @@
+   # UI & Ícones
+   cupertino_icons: ^1.0.2
+   provider: ^6.1.2
+-  # --- CORREÇÃO: Revertendo para a versão compatível com dart_vlc ---
+-  audio_video_progress_bar: ^0.11.0
++  audio_video_progress_bar: ^2.0.1
+ 
+   # Redes e Autenticação
+   http: ^1.2.0
+   flutter_web_auth_2: ^3.1.2
+   crypto: ^3.0.3
+ 
+   # Persistência e Configuração
+   shared_preferences: ^2.2.2
+   flutter_dotenv: ^5.1.0
+ 
+-  # Player de Áudio (Arquitetura Híbrida )
++  # Player de Áudio
+   just_audio: ^0.9.36
+-  dart_vlc: ^0.4.0
+ 
+   # Fonte de Áudio
+   youtube_explode_dart: ^2.2.0
+ 
+ dev_dependencies:
+   flutter_test:
+

@@ -3,7 +3,7 @@ class StreamPlaylist {
   final String name;
   final String imageUrl;
   final String owner;
-  final String source; // 'spotify' ou 'deezer'
+  final String source;
 
   StreamPlaylist({
     required this.id,
@@ -13,7 +13,6 @@ class StreamPlaylist {
     required this.source,
   });
 
-  // Construtor para dados vindos da API do Spotify
   factory StreamPlaylist.fromSpotifyJson(Map<String, dynamic> json) {
     return StreamPlaylist(
       id: json['id'] ?? '',
@@ -24,23 +23,27 @@ class StreamPlaylist {
     );
   }
 
-  // Construtor para dados vindos do nosso banco de dados
+
+ factory StreamPlaylist.fromDeezerJson(Map<String, dynamic> json) {
+   return StreamPlaylist(
+     id: json['id']?.toString() ?? '',
+     name: json['title'] ?? 'Playlist Sem Nome',
+     imageUrl: json['picture_medium'] ?? '',
+     owner: json['creator']?['name'] ?? 'Desconhecido',
+     source: 'deezer',
+   );
+ }
+
   factory StreamPlaylist.fromDbJson(Map<String, dynamic> json) {
     return StreamPlaylist(
-      id: json['id'],
-      name: json['name'],
-      imageUrl: json['imageUrl'],
-      owner: json['owner'],
-      source: json['source'],
+      id: json['id'], name: json['name'], imageUrl: json['imageUrl'],
+      owner: json['owner'], source: json['source'],
     );
   }
 
-  // Método para converter o objeto para um formato JSON para o DB
   Map<String, dynamic> toDbJson() => {
-        'id': id,
-        'name': name,
-        'imageUrl': imageUrl,
-        'owner': owner,
-        'source': source,
-      };
+    'id': id, 'name': name, 'imageUrl': imageUrl,
+    'owner': owner, 'source': source,
+  };
 }
+

@@ -1,54 +1,71 @@
+
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-// Importe AMBOS os seus modelos
-import '../model/stream_playlist.dart'; 
-import '../model/stream_track.dart';
+import 'auth_service.dart';
+import 'stream_playlist.dart';
+import 'stream_track.dart';
 
 class SpotifyApiService {
   final String _accessToken;
+  final AuthService _authService;
   static const String _baseUrl = 'https://api.spotify.com/v1';
 
-  SpotifyApiService(this._accessToken );
+  SpotifyApiService(this._accessToken, this._authService );
 
-  Map<String, String> get _headers => {
-    'Authorization': 'Bearer $_accessToken',
-    'Content-Type': 'application/json',
-  };
-
-  // Função genérica para buscar dados paginados (sem alterações)
-  Future<List<T>> _fetchPagedData<T>(String endpoint, T Function(Map<String, dynamic>) fromJson) async {
-    List<T> allItems = [];
-    String? nextUrl = '$_baseUrl/$endpoint';
-
-    while (nextUrl != null) {
-      final response = await http.get(Uri.parse(nextUrl ), headers: _headers);
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        // O endpoint 'me/tracks' tem um formato um pouco diferente,
-        // o item real está dentro de um objeto 'track'.
-        // O seu modelo já lida com isso, então o código aqui permanece genérico.
-        final items = (data['items'] as List).map((item) => fromJson(item)).toList();
-        allItems.addAll(items);
-        nextUrl = data['next'];
+  Future<T> _handleRequest<T>(Future<http.Response> Function( ) request, T Function(dynamic) onSuccess) async {
+    var response = await request();
+    if (response.statusCode == 401) {
+      final newAccessToken = await _authService.refreshSpotifyToken();
+      if (newAccessToken != null) {
+        response = await request(); // Tenta novamente com o novo token
       } else {
-        throw Exception('Falha ao carregar dados de $endpoint: ${response.body}');
+        throw Exception('Sessão expirada. Por favor, faça login novamente.');
       }
     }
-    return allItems;
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return onSuccess(data);
+    } else {
+      throw Exception('Falha ao carregar dados: ${response.body}');
+    }
   }
 
-  // --- MÉTODOS DA API ---
+  Future<List<R>> _fetchPagedData<R>(String endpoint, R Function(Map<String, dynamic>) fromJson) async {
+    return _handleRequest(() async {
+      return http.get(
+        Uri.parse('$_baseUrl/$endpoint' ),
+        headers: {'Authorization': 'Bearer $_accessToken'},
+      );
+    }, (data) {
+      final itemsList = (data['items'] as List?) ?? [];
+      // --- CORREÇÃO DEFINITIVA PARA O ERRO DE TYPE CAST ---
+      // Filtra itens onde o campo 'track' é nulo ANTES de tentar o parse.
+      return itemsList
+          .where((item) => item['track'] != null)
+          .map((item) => fromJson(item as Map<String, dynamic>))
+          .toList();
+    });
+  }
 
   Future<List<StreamPlaylist>> getCurrentUserPlaylists() async {
-    return _fetchPagedData('me/playlists?limit=50', (json) => StreamPlaylist.fromSpotifyJson(json));
+    return _handleRequest(() async {
+      return http.get(
+        Uri.parse('$_baseUrl/me/playlists?limit=50' ),
+        headers: {'Authorization': 'Bearer $_accessToken'},
+      );
+    }, (data) {
+      final itemsList = (data['items'] as List?) ?? [];
+      return itemsList.map((item) => StreamPlaylist.fromSpotifyJson(item)).toList();
+    });
   }
 
-  // --- NOVO MÉTODO ADICIONADO ---
   Future<List<StreamTrack>> getSavedTracks() async {
-    // Usa o construtor de fábrica do seu modelo StreamTrack.
     return _fetchPagedData('me/tracks?limit=50', (json) => StreamTrack.fromSpotifyJson(json));
   }
 
-  // Adicione os outros métodos aqui (Artistas, Álbuns) quando precisar.
+  Future<List<StreamTrack>> getPlaylistTracks(String playlistId) async {
+    final cleanPlaylistId = Uri.encodeComponent(playlistId);
+    return _fetchPagedData('playlists/$cleanPlaylistId/tracks?limit=100', (json) => StreamTrack.fromSpotifyJson(json));
+  }
 }
 
