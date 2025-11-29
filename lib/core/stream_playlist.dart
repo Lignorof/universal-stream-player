@@ -23,27 +23,35 @@ class StreamPlaylist {
     );
   }
 
-
- factory StreamPlaylist.fromDeezerJson(Map<String, dynamic> json) {
-   return StreamPlaylist(
-     id: json['id']?.toString() ?? '',
-     name: json['title'] ?? 'Playlist Sem Nome',
-     imageUrl: json['picture_medium'] ?? '',
-     owner: json['creator']?['name'] ?? 'Desconhecido',
-     source: 'deezer',
-   );
- }
+  // Construtor para dados vindos da API do Deezer
+  factory StreamPlaylist.fromDeezerJson(Map<String, dynamic> json) {
+    return StreamPlaylist(
+      // O ID do Deezer é um int, convertemos para String para consistência
+      id: json['id']?.toString() ?? '',
+      name: json['title'] ?? 'Playlist Sem Nome',
+      // Deezer tem diferentes tamanhos de imagem, pegamos a média
+      imageUrl: json['picture_medium'] ?? '',
+      owner: json['user']?['name'] ?? 'Desconhecido',
+      source: 'deezer',
+    );
+  }
 
   factory StreamPlaylist.fromDbJson(Map<String, dynamic> json) {
     return StreamPlaylist(
-      id: json['id'], name: json['name'], imageUrl: json['imageUrl'],
-      owner: json['owner'], source: json['source'],
+      id: json['id'],
+      name: json['name'],
+      imageUrl: json['imageUrl'],
+      owner: json['owner'],
+      source: json['source'],
     );
   }
 
   Map<String, dynamic> toDbJson() => {
-    'id': id, 'name': name, 'imageUrl': imageUrl,
-    'owner': owner, 'source': source,
-  };
+        'id': id,
+        'name': name,
+        'imageUrl': imageUrl,
+        'owner': owner,
+        'source': source,
+      };
 }
 
