@@ -15,15 +15,12 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<AuthService>(
       builder: (context, authService, child) {
-        return ChangeNotifierProvider(
-          create: (_) => AudioPlayerService(),
-          child: Scaffold(
-            body: authService.isAuthenticated
-                ? const LibraryScreen()
-                : const LoginScreen(),
-            bottomNavigationBar:
-                authService.isAuthenticated ? const MiniPlayer() : null,
-          ),
+        return Scaffold(
+          body: authService.isAuthenticated
+              ? const LibraryScreen()
+              : const LoginScreen(),
+          bottomNavigationBar:
+              authService.isAuthenticated ? const MiniPlayer() : null,
         );
       },
     );
