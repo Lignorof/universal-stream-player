@@ -33,12 +33,14 @@ class UniversalStreamPlayerApp extends StatelessWidget {
   const UniversalStreamPlayerApp({super.key});
   @override
   Widget build(BuildContext context) {
+    // Obtain the AuthService instance from Provider and pass it into HomeScreen.
+    final authService = Provider.of<AuthService>(context, listen: false);
+
     return MaterialApp(
       title: 'Universal Stream Player',
       theme: ThemeData.dark(useMaterial3: true),
       debugShowCheckedModeBanner: false,
-      home: const HomeScreen(),
+      home: HomeScreen(authService: authService),
     );
   }
 }
-

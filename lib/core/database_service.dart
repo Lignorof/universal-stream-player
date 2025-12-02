@@ -46,7 +46,6 @@ class DatabaseService {
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
 
-    // Insert tracks and link to playlist
     for (final track in playlist.tracks) {
       await db.insert(
         'tracks',
