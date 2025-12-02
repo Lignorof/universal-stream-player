@@ -60,7 +60,14 @@ class AuthService extends ChangeNotifier {
       'code_challenge': codeChallenge,
     } );
     try {
-      final result = await FlutterWebAuth2.authenticate(url: authUrl.toString(), callbackUrlScheme: _spotifyCallbackScheme);
+      final result = await FlutterWebAuth2.authenticate(
+        url: authUrl.toString(),
+        callbackUrlScheme: _spotifyCallbackScheme,
+        options: const FlutterWebAuth2Options(
+          // Use the system's default browser on Linux (xdg-open)
+          preferEphemeral: false,
+        ),
+      );
       final code = Uri.parse(result).queryParameters['code'];
       if (code != null) {
         await _exchangeSpotifyCode(code, codeVerifier);
@@ -83,7 +90,14 @@ class AuthService extends ChangeNotifier {
       'response_type': 'token',
     } );
     try {
-      final result = await FlutterWebAuth2.authenticate(url: authUrl.toString(), callbackUrlScheme: _deezerCallbackScheme);
+      final result = await FlutterWebAuth2.authenticate(
+        url: authUrl.toString(),
+        callbackUrlScheme: _deezerCallbackScheme,
+        options: const FlutterWebAuth2Options(
+          // Use the system's default browser on Linux (xdg-open)
+          preferEphemeral: false,
+        ),
+      );
       final fragment = Uri.parse(result).fragment;
       final token = Uri.splitQueryString(fragment)['access_token'];
       if (token != null) {

@@ -19,6 +19,7 @@ dependencies:
   http: ^1.2.0
   flutter_web_auth_2: ^4.1.0
   crypto: ^3.0.3
+  url_launcher: ^6.2.1
 
   # Persistência e Configuração
   shared_preferences: ^2.2.2
