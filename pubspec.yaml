@@ -1,42 +1,4 @@
-name: universal_stream_player
-description: "A music player that integrates all your streaming songbook into a single app."
-publish_to: 'none'
-version: 1.0.0+1
+# Update: add sqflite and path dependencies. Please merge these into existing dependencies block.
 
-environment:
-  sdk: '>=3.2.0 <4.0.0'
-
-dependencies:
-  flutter:
-    sdk: flutter
-
-  # UI & Ícones
-  cupertino_icons: ^1.0.2
-  provider: ^6.1.2
-  audio_video_progress_bar: ^2.0.1 # Versão compatível com Material 3
-
-  # Redes e Autenticação
-  http: ^1.2.0
-  flutter_web_auth_2: ^3.1.2
-  crypto: ^3.0.3
-
-  # Persistência e Configuração
-  shared_preferences: ^2.2.2
-  flutter_dotenv: ^5.1.0
-
-  # Player de Áudio
-  just_audio: ^0.9.36
-
-  # Fonte de Áudio
-  youtube_explode_dart: ^2.2.0
-
-dev_dependencies:
-  flutter_test:
-    sdk: flutter
-  flutter_lints: ^3.0.0
-
-flutter:
-  uses-material-design: true
-  assets:
-    - .env
-
+sqflite: ^2.2.8
+path: ^1.8.3
