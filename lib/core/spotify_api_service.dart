@@ -1,22 +1,25 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'auth_service.dart';
+import 'auth_token_provider.dart';
 import 'stream_playlist.dart';
 import 'stream_track.dart';
 
 class SpotifyApiService {
-  final String _accessToken;
-  final AuthService _authService;
+  final AuthTokenProvider _tokenProvider;
   static const String _baseUrl = 'https://api.spotify.com/v1';
 
-  SpotifyApiService(this._accessToken, this._authService );
+  SpotifyApiService(this._tokenProvider);
 
-  Future<T> _handleApiCall<T>(Future<http.Response> Function( ) apiCall, T Function(dynamic) onSuccess) async {
-    var response = await apiCall();
+  Future<T> _handleApiCall<T>(Future<http.Response> Function(String token) apiCall, T Function(dynamic) onSuccess) async {
+    final accessToken = await _tokenProvider.getAccessToken();
+    if (accessToken == null) {
+      throw Exception('Não foi possível obter o token de acesso. Faça login novamente.');
+    }
+    var response = await apiCall(accessToken);
     if (response.statusCode == 401) {
-      final newAccessToken = await _authService.refreshSpotifyToken();
+      final newAccessToken = await _tokenProvider.refreshToken();
       if (newAccessToken != null) {
-        response = await apiCall(); // Tenta novamente com o novo token
+        response = await apiCall(newAccessToken); // Tenta novamente com o novo token
       } else {
         throw Exception('Não foi possível renovar a sessão. Faça login novamente.');
       }
@@ -31,7 +34,7 @@ class SpotifyApiService {
 
   Future<List<T>> _fetchPagedData<T>(String endpoint, T Function(Map<String, dynamic>) fromJson) async {
     return _handleApiCall(
-      () => http.get(Uri.parse('$_baseUrl/$endpoint' ), headers: {'Authorization': 'Bearer $_accessToken'}),
+      (token) => http.get(Uri.parse('$_baseUrl/$endpoint'), headers: {'Authorization': 'Bearer $token'}),
       (data) {
         final items = data['items'] as List?;
         if (items == null) return <T>[];

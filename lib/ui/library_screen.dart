@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:universal_stream_player/core/auth_service.dart';
+import 'package:universal_stream_player/core/spotify_auth_token_provider.dart';
 import 'package:universal_stream_player/core/stream_playlist.dart';
 import 'package:universal_stream_player/core/stream_track.dart';
 import 'package:universal_stream_player/core/youtube_music_api_service.dart';
@@ -28,7 +29,8 @@ class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProvider
   void initState() {
     super.initState();
     final authService = context.read<AuthService>();
-    _spotifyService = SpotifyApiService(authService.spotifyAccessToken!, authService);
+    final tokenProvider = SpotifyAuthTokenProvider(authService);
+    _spotifyService = SpotifyApiService(tokenProvider);
     _tabController = TabController(length: 2, vsync: this);
     _loadLibraryData();
   }

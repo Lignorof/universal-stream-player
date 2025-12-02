@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:universal_stream_player/core/auth_service.dart';
 import 'package:universal_stream_player/core/spotify_api_service.dart';
+import 'package:universal_stream_player/core/spotify_auth_token_provider.dart';
 import 'package:universal_stream_player/core/stream_playlist.dart';
 import 'package:universal_stream_player/core/stream_track.dart';
 import 'package:universal_stream_player/core/audio_player_service.dart';
@@ -27,11 +28,9 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
   @override
   void initState() {
     super.initState();
-    // Usa o authService recebido para criar o SpotifyApiService
-    final spotifyService = SpotifyApiService(
-      widget.authService.spotifyAccessToken!,
-      widget.authService,
-    );
+    // Usa o authService recebido para criar o SpotifyApiService via token provider
+    final tokenProvider = SpotifyAuthTokenProvider(widget.authService);
+    final spotifyService = SpotifyApiService(tokenProvider);
     _tracksFuture = spotifyService.getPlaylistTracks(widget.playlist.id);
   }
 
