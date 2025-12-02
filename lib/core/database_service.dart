@@ -4,76 +4,85 @@ import 'package:universal_stream_player/models/stream_playlist.dart';
 import 'package:universal_stream_player/models/stream_track.dart';
 
 class DatabaseService {
-  static final DatabaseService instance = DatabaseService._init();
-  static Database? _database;
+  Database? _db;
 
-  DatabaseService._init();
+  Future<void> init() async {
+    final databasesPath = await getDatabasesPath();
+    final path = join(databasesPath, 'universal_stream_player.db');
 
-  Future<Database> get database async {
-    if (_database != null) return _database!;
-    _database = await _initDB('usp_main.db');
-    return _database!;
+    _db = await openDatabase(
+      path,
+      version: 1,
+      onCreate: (db, version) async {
+        await db.execute('''
+          CREATE TABLE playlists (
+            id TEXT PRIMARY KEY,
+            title TEXT,
+            source TEXT
+          )
+        ''');
+        await db.execute('''
+          CREATE TABLE tracks (
+            id TEXT PRIMARY KEY,
+            title TEXT,
+            artist TEXT,
+            album TEXT,
+            durationMs INTEGER,
+            url TEXT,
+            source TEXT,
+            playlistId TEXT
+          )
+        ''');
+      },
+    );
   }
 
-  Future<Database> _initDB(String filePath) async {
-    final dbPath = await getDatabasesPath();
-    final path = join(dbPath, filePath);
-    return await openDatabase(path, version: 1, onCreate: _createDB);
-  }
+  Future<void> insertPlaylist(StreamPlaylist playlist) async {
+    final db = _db;
+    if (db == null) throw Exception('Database not initialized');
+    await db.insert(
+      'playlists',
+      {'id': playlist.id, 'title': playlist.title, 'source': playlist.source},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
 
-  Future _createDB(Database db, int version) async {
-    await db.execute('''
-      CREATE TABLE playlists (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        imageUrl TEXT,
-        owner TEXT,
-        source TEXT NOT NULL
-      )
-    ''');
-    await db.execute('''
-      CREATE TABLE tracks (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        playlistId TEXT NOT NULL,
-        name TEXT NOT NULL,
-        artist TEXT NOT NULL,
-        albumName TEXT,
-        imageUrl TEXT,
-        FOREIGN KEY (playlistId) REFERENCES playlists (id) ON DELETE CASCADE
-      )
-    ''');
-  }
-
-  Future<void> cachePlaylists(List<StreamPlaylist> playlists) async {
-    final db = await instance.database;
-    final batch = db.batch();
-    for (final playlist in playlists) {
-      batch.insert('playlists', playlist.toDbJson(), conflictAlgorithm: ConflictAlgorithm.replace);
+    // Insert tracks and link to playlist
+    for (final track in playlist.tracks) {
+      await db.insert(
+        'tracks',
+        {
+          'id': track.id,
+          'title': track.title,
+          'artist': track.artist,
+          'album': track.album,
+          'durationMs': track.durationMs,
+          'url': track.url,
+          'source': track.source,
+          'playlistId': playlist.id,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
     }
-    await batch.commit(noResult: true);
   }
 
-  Future<void> cacheTracks(String playlistId, List<StreamTrack> tracks) async {
-    final db = await instance.database;
-    final batch = db.batch();
-    batch.delete('tracks', where: 'playlistId = ?', whereArgs: [playlistId]);
-    for (final track in tracks) {
-      batch.insert('tracks', track.toDbJson(playlistId), conflictAlgorithm: ConflictAlgorithm.replace);
+  Future<List<StreamPlaylist>> getPlaylists() async {
+    final db = _db;
+    if (db == null) throw Exception('Database not initialized');
+
+    final playlistRows = await db.query('playlists');
+    final List<StreamPlaylist> playlists = [];
+
+    for (final row in playlistRows) {
+      final tracksRows = await db.query('tracks', where: 'playlistId = ?', whereArgs: [row['id']]);
+      final tracks = tracksRows.map((t) => StreamTrack.fromMap(Map<String, dynamic>.from(t))).toList();
+      playlists.add(StreamPlaylist(
+        id: row['id'] as String,
+        title: row['title'] as String,
+        source: row['source'] as String?,
+        tracks: tracks,
+      ));
     }
-    await batch.commit(noResult: true);
-  }
 
-  Future<List<StreamPlaylist>> getCachedPlaylists() async {
-    final db = await instance.database;
-    final maps = await db.query('playlists', orderBy: 'name');
-    if (maps.isEmpty) return [];
-    return maps.map((json) => StreamPlaylist.fromDbJson(json)).toList();
-  }
-
-  Future<List<StreamTrack>> getCachedTracks(String playlistId) async {
-    final db = await instance.database;
-    final maps = await db.query('tracks', where: 'playlistId = ?', whereArgs: [playlistId]);
-    if (maps.isEmpty) return [];
-    return maps.map((json) => StreamTrack.fromDbJson(json)).toList();
+    return playlists;
   }
 }

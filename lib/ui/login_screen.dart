@@ -18,19 +18,26 @@ class LoginScreen extends StatelessWidget {
             children: [
               Text('Universal Stream Player',
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold)),
+                  style: Theme.of(context)
+                      .textTheme
+                      .headlineMedium
+                      ?.copyWith(fontWeight: FontWeight.bold)),
               const SizedBox(height: 60),
               ElevatedButton.icon(
                 icon: const Icon(Icons.music_note),
                 label: const Text('Login com Spotify'),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.green, padding: const EdgeInsets.symmetric(vertical: 12)),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    padding: const EdgeInsets.symmetric(vertical: 12)),
                 onPressed: () => _login(context, authService.loginSpotify),
               ),
               const SizedBox(height: 20),
               ElevatedButton.icon(
                 icon: const Icon(Icons.album),
                 label: const Text('Login com Deezer'),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.blueGrey, padding: const EdgeInsets.symmetric(vertical: 12)),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blueGrey,
+                    padding: const EdgeInsets.symmetric(vertical: 12)),
                 onPressed: () => _login(context, authService.loginDeezer),
               ),
             ],
@@ -44,10 +51,12 @@ class LoginScreen extends StatelessWidget {
     try {
       await loginMethod();
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => HomeScreen(authService: authService)),
+        MaterialPageRoute(
+            builder: (context) => HomeScreen(authService: authService)),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro no login: $e')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Erro no login: $e')));
     }
   }
 }

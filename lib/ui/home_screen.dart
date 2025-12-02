@@ -9,7 +9,7 @@ import 'library_screen.dart';
 import 'package:audio_video_progress_bar/audio_video_progress_bar.dart';
 
 class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({super.key, required AuthService authService});
 
   @override
   Widget build(BuildContext context) {
@@ -30,12 +30,14 @@ class HomeScreen extends StatelessWidget {
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
 
-  Future<void> _login(BuildContext context, Future<void> Function() loginMethod) async {
+  Future<void> _login(
+      BuildContext context, Future<void> Function() loginMethod) async {
     try {
       await loginMethod();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro no login: $e'), backgroundColor: Colors.red),
+        SnackBar(
+            content: Text('Erro no login: $e'), backgroundColor: Colors.red),
       );
     }
   }
@@ -48,7 +50,8 @@ class LoginScreen extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('Bem-vindo ao Universal Stream Player', style: TextStyle(fontSize: 24)),
+            const Text('Bem-vindo ao Universal Stream Player',
+                style: TextStyle(fontSize: 24)),
             const SizedBox(height: 40),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
@@ -80,7 +83,8 @@ class LoginScreen extends StatelessWidget {
 
 class MiniPlayer extends StatelessWidget {
   const MiniPlayer({super.key});
-  static bool get _isDesktop => !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
+  static bool get _isDesktop =>
+      !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
 
   @override
   Widget build(BuildContext context) {
@@ -102,7 +106,8 @@ class MiniPlayer extends StatelessWidget {
             stream: audioPlayer.positionStream,
             builder: (context, positionSnapshot) {
               return StreamBuilder<Duration?>(
-                stream: audioPlayer.durationStream.map((d) => d ?? Duration.zero),
+                stream:
+                    audioPlayer.durationStream.map((d) => d ?? Duration.zero),
                 builder: (context, durationSnapshot) {
                   final position = positionSnapshot.data ?? Duration.zero;
                   final total = durationSnapshot.data ?? Duration.zero;
@@ -120,15 +125,21 @@ class MiniPlayer extends StatelessWidget {
           Expanded(
             child: Row(
               children: [
-                Image.network(track.imageUrl, width: 48, height: 48, fit: BoxFit.cover),
+                Image.network(track.imageUrl,
+                    width: 48, height: 48, fit: BoxFit.cover),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(track.name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      Text(track.artist, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: Colors.grey[400])),
+                      Text(track.name,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.bold)),
+                      Text(track.artist,
+                          overflow: TextOverflow.ellipsis,
+                          style:
+                              TextStyle(fontSize: 12, color: Colors.grey[400])),
                     ],
                   ),
                 ),
@@ -141,7 +152,11 @@ class MiniPlayer extends StatelessWidget {
                         final volume = snapshot.data ?? 1.0;
                         return Row(
                           children: [
-                            Icon(volume > 0.5 ? Icons.volume_up : (volume > 0 ? Icons.volume_down : Icons.volume_mute)),
+                            Icon(volume > 0.5
+                                ? Icons.volume_up
+                                : (volume > 0
+                                    ? Icons.volume_down
+                                    : Icons.volume_mute)),
                             Expanded(
                               child: Slider(
                                 value: volume,
@@ -161,7 +176,8 @@ class MiniPlayer extends StatelessWidget {
                     final playerState = snapshot.data;
                     final isPlaying = playerState?.playing ?? false;
                     final processingState = playerState?.processingState;
-                    if (processingState == ProcessingState.loading || processingState == ProcessingState.buffering) {
+                    if (processingState == ProcessingState.loading ||
+                        processingState == ProcessingState.buffering) {
                       return const SizedBox(
                           width: 48,
                           height: 48,
@@ -169,12 +185,16 @@ class MiniPlayer extends StatelessWidget {
                               child: SizedBox(
                                   width: 24,
                                   height: 24,
-                                  child: CircularProgressIndicator(strokeWidth: 2))));
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2))));
                     }
                     return IconButton(
                       iconSize: 32,
-                      icon: Icon(isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled),
-                      onPressed: isPlaying ? audioPlayer.pause : audioPlayer.resume,
+                      icon: Icon(isPlaying
+                          ? Icons.pause_circle_filled
+                          : Icons.play_circle_filled),
+                      onPressed:
+                          isPlaying ? audioPlayer.pause : audioPlayer.resume,
                     );
                   },
                 ),
@@ -186,4 +206,3 @@ class MiniPlayer extends StatelessWidget {
     );
   }
 }
-
